@@ -36,8 +36,6 @@ RXRATE=$(echo "$STATS" \
 
 ################################
 # GENERIC MCS PARSER
-# Works for:
-# HE-MCS / VHT-MCS / MCS
 ################################
 
 TXMCS=$(echo "$TXRATE" \
@@ -61,7 +59,7 @@ CONNECTED=$(echo "$STATS" \
 | awk '/connected time/ {print $3; exit}')
 
 ################################
-# SURVEY (NOISE/SNR/CHANNEL BUSY)
+# SURVEY (NOISE/SNR/BUSY)
 ################################
 
 SURVEY=$(iw dev $MESHIF survey dump)
@@ -116,6 +114,27 @@ fi
 STATUS=""
 
 ################################
+# GET DISTANCE FROM QUERY
+################################
+
+DISTANCE=$(echo "$QUERY_STRING" \
+| sed -n 's/.*distance=\([0-9]*\).*/\1/p')
+
+[ -z "$DISTANCE" ] && DISTANCE="0"
+
+################################
+# CLEAR LOG BUTTON
+################################
+
+if echo "$QUERY_STRING" | grep -q "clear=1"; then
+
+rm -f "$LOGFILE"
+
+STATUS="CSV Log Cleared"
+
+fi
+
+################################
 # CAPTURE BUTTON
 ################################
 
@@ -125,11 +144,11 @@ TIME=$(date +"%F %T")
 
 if [ ! -f "$LOGFILE" ]; then
 
-echo "time,rssi,avg,ack,noise,snr,busy_pct,txrate,rxrate,txmcs,rxmcs,retries,failed,airtime,connected" > "$LOGFILE"
+echo "distance_m,time,rssi,avg,ack,noise,snr,busy_pct,txrate,rxrate,txmcs,rxmcs,retries,failed,airtime,connected" > "$LOGFILE"
 
 fi
 
-echo "$TIME,$RSSI,$AVG,$ACK,$NOISE,$SNR,$BUSYPCT,\"$TXRATE\",\"$RXRATE\",$TXMCS,$RXMCS,$RETRIES,$FAILED,$AIRTIME,$CONNECTED" >> "$LOGFILE"
+echo "$DISTANCE,$TIME,$RSSI,$AVG,$ACK,$NOISE,$SNR,$BUSYPCT,\"$TXRATE\",\"$RXRATE\",$TXMCS,$RXMCS,$RETRIES,$FAILED,$AIRTIME,$CONNECTED" >> "$LOGFILE"
 
 STATUS="Measurement Saved"
 
@@ -231,6 +250,20 @@ type="hidden"
 name="run"
 value="1">
 
+<p><b>Distance (meters):</b></p>
+
+<input
+type="number"
+name="distance"
+value="$DISTANCE"
+style="
+font-size:32px;
+padding:15px;
+width:220px;
+">
+
+<br><br>
+
 <input
 type="submit"
 value="Capture Measurement"
@@ -251,6 +284,30 @@ value="Download CSV"
 style="
 font-size:30px;
 padding:20px;
+">
+
+</form>
+
+<br>
+
+<form action="/cgi-bin/meshtest.sh" method="get">
+
+<input
+type="hidden"
+name="clear"
+value="1">
+
+<input
+type="submit"
+value="Clear CSV Log"
+
+onclick="return confirm('Delete all measurements?');"
+
+style="
+font-size:30px;
+padding:20px;
+background-color:#cc4444;
+color:white;
 ">
 
 </form>

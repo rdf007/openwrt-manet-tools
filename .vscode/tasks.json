@@ -1,0 +1,14 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Deploy meshtest.sh",
+
+      "type": "shell",
+
+      "command": "scp -O openwrt/meshtest.sh root@10.10.10.1:/www/cgi-bin/",
+
+      "problemMatcher": []
+    }
+  ]
+}

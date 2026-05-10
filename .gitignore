@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# VSCode logs
+.vscode/*.log
+
+# CSV logs
+data/*.csv
+!data/sample_mesh_test_log.csv
+
+# Generated plots
+*.png
+
+# OS files
+.DS_Store
