@@ -12,6 +12,36 @@ MESHIF="wlan1"
 mkdir -p "$LOGDIR"
 
 ################################
+# HANDLE GET / POST
+################################
+
+if [ "$REQUEST_METHOD" = "POST" ]; then
+
+    POST_DATA=$(cat)
+
+else
+
+    POST_DATA="$QUERY_STRING"
+
+fi
+
+################################
+# PARSE FORM DATA
+################################
+
+DISTANCE=$(echo "$POST_DATA" \
+| sed -n 's/.*distance_m=\([^&]*\).*/\1/p')
+
+LAT=$(echo "$POST_DATA" \
+| sed -n 's/.*lat=\([^&]*\).*/\1/p')
+
+LON=$(echo "$POST_DATA" \
+| sed -n 's/.*lon=\([^&]*\).*/\1/p')
+
+ACC=$(echo "$POST_DATA" \
+| sed -n 's/.*acc=\([^&]*\).*/\1/p')
+
+################################
 # MESH STATION STATS
 ################################
 
@@ -59,7 +89,7 @@ CONNECTED=$(echo "$STATS" \
 | awk '/connected time/ {print $3; exit}')
 
 ################################
-# SURVEY (NOISE/SNR/BUSY)
+# SURVEY DATA
 ################################
 
 SURVEY=$(iw dev $MESHIF survey dump)
@@ -78,20 +108,26 @@ BUSY=$(echo "$SURVEY" \
 ################################
 
 if [ -n "$RSSI" ] && [ -n "$NOISE" ]; then
-SNR=$((RSSI - NOISE))
+    SNR=$((RSSI - NOISE))
 else
-SNR="-"
+    SNR="-"
 fi
 
 if [ -n "$ACTIVE" ] && [ "$ACTIVE" -gt 0 ]; then
-BUSYPCT=$((100 * BUSY / ACTIVE))
+    BUSYPCT=$((100 * BUSY / ACTIVE))
 else
-BUSYPCT="-"
+    BUSYPCT="-"
 fi
 
 ################################
 # DEFAULTS
 ################################
+
+[ -z "$DISTANCE" ] && DISTANCE=""
+
+[ -z "$LAT" ] && LAT=""
+[ -z "$LON" ] && LON=""
+[ -z "$ACC" ] && ACC=""
 
 [ -z "$RSSI" ] && RSSI="NoPeer"
 [ -z "$AVG" ] && AVG="-"
@@ -114,43 +150,50 @@ fi
 STATUS=""
 
 ################################
-# GET DISTANCE FROM QUERY
-################################
-
-DISTANCE=$(echo "$QUERY_STRING" \
-| sed -n 's/.*distance=\([0-9]*\).*/\1/p')
-
-[ -z "$DISTANCE" ] && DISTANCE="0"
-
-################################
-# CLEAR LOG BUTTON
-################################
-
-if echo "$QUERY_STRING" | grep -q "clear=1"; then
-
-rm -f "$LOGFILE"
-
-STATUS="CSV Log Cleared"
-
-fi
-
-################################
 # CAPTURE BUTTON
 ################################
 
-if echo "$QUERY_STRING" | grep -q "run=1"; then
+if echo "$POST_DATA" | grep -q "run=1"; then
 
-TIME=$(date +"%F %T")
+    TIME=$(date +"%F %T")
 
-if [ ! -f "$LOGFILE" ]; then
+    if [ ! -f "$LOGFILE" ]; then
 
-echo "distance_m,time,rssi,avg,ack,noise,snr,busy_pct,txrate,rxrate,txmcs,rxmcs,retries,failed,airtime,connected" > "$LOGFILE"
+        echo "distance_m,lat,lon,accuracy_m,time,rssi,avg,ack,noise,snr,busy_pct,txrate,rxrate,txmcs,rxmcs,retries,failed,airtime,connected" > "$LOGFILE"
+
+    fi
+
+    echo "$DISTANCE,$LAT,$LON,$ACC,$TIME,$RSSI,$AVG,$ACK,$NOISE,$SNR,$BUSYPCT,\"$TXRATE\",\"$RXRATE\",$TXMCS,$RXMCS,$RETRIES,$FAILED,$AIRTIME,$CONNECTED" >> "$LOGFILE"
+
+    ################################################
+    # REDIRECT AFTER POST
+    ################################################
+
+    echo "Status: 303 See Other"
+    echo "Location: /cgi-bin/meshtest.sh"
+    echo ""
+
+    exit 0
 
 fi
 
-echo "$DISTANCE,$TIME,$RSSI,$AVG,$ACK,$NOISE,$SNR,$BUSYPCT,\"$TXRATE\",\"$RXRATE\",$TXMCS,$RXMCS,$RETRIES,$FAILED,$AIRTIME,$CONNECTED" >> "$LOGFILE"
+################################
+# CLEAR CSV
+################################
 
-STATUS="Measurement Saved"
+if echo "$POST_DATA" | grep -q "clear=1"; then
+
+    rm -f "$LOGFILE"
+
+    ################################################
+    # REDIRECT AFTER POST
+    ################################################
+
+    echo "Status: 303 See Other"
+    echo "Location: /cgi-bin/meshtest.sh"
+    echo ""
+
+    exit 0
 
 fi
 
@@ -159,13 +202,13 @@ fi
 ################################
 
 if [ -f "$LOGFILE" ]; then
-COUNT=$(( $(wc -l < "$LOGFILE") - 1 ))
+    COUNT=$(( $(wc -l < "$LOGFILE") - 1 ))
 else
-COUNT=0
+    COUNT=0
 fi
 
 ################################
-# HTML
+# HTML OUTPUT
 ################################
 
 echo "Content-type: text/html"
@@ -179,6 +222,72 @@ cat <<EOF
 
 <title>Mesh Range Test Dashboard</title>
 
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<script>
+
+function updateLocation() {
+
+    navigator.geolocation.getCurrentPosition(
+
+        function(position) {
+
+            //////////////////////////////////////////////////
+            // STORE GPS INTO FORM
+            //////////////////////////////////////////////////
+
+            document.getElementById("lat").value =
+                position.coords.latitude;
+
+            document.getElementById("lon").value =
+                position.coords.longitude;
+
+            document.getElementById("acc").value =
+                position.coords.accuracy;
+
+            //////////////////////////////////////////////////
+            // UPDATE STATUS
+            //////////////////////////////////////////////////
+
+            document.getElementById("gps_status").innerHTML =
+                "GPS OK";
+
+            document.getElementById("gps_status").style.color =
+                "green";
+
+            document.getElementById("gps_lat").innerHTML =
+                position.coords.latitude;
+
+            document.getElementById("gps_lon").innerHTML =
+                position.coords.longitude;
+
+            document.getElementById("gps_acc").innerHTML =
+                position.coords.accuracy;
+
+        },
+
+        function(error) {
+
+            document.getElementById("gps_status").innerHTML =
+                "GPS ERROR";
+
+            document.getElementById("gps_status").style.color =
+                "red";
+
+            console.log(
+                "GPS Error:",
+                error.message
+            );
+
+        }
+
+    );
+}
+
+window.onload = updateLocation;
+
+</script>
+
 </head>
 
 <body style="
@@ -189,7 +298,7 @@ font-size:22px;
 
 <h1>Mesh Range Test Dashboard</h1>
 
-<form action="/cgi-bin/meshtest.sh">
+<form action="/cgi-bin/meshtest.sh" method="get">
 
 <input
 type="submit"
@@ -239,30 +348,58 @@ padding:15px;
 
 <hr>
 
+<h2>GPS</h2>
+
+<p><b>Status:</b> <span id="gps_status">Waiting...</span></p>
+
+<p><b>Latitude:</b> <span id="gps_lat">$LAT</span></p>
+
+<p><b>Longitude:</b> <span id="gps_lon">$LON</span></p>
+
+<p><b>Accuracy:</b> <span id="gps_acc">$ACC</span> m</p>
+
+<hr>
+
 <h2>$STATUS</h2>
 
 <h3>Measurements saved: $COUNT</h3>
 
-<form action="/cgi-bin/meshtest.sh" method="get">
+<form action="/cgi-bin/meshtest.sh" method="post">
 
 <input
 type="hidden"
 name="run"
 value="1">
 
-<p><b>Distance (meters):</b></p>
+<input
+type="hidden"
+id="lat"
+name="lat">
+
+<input
+type="hidden"
+id="lon"
+name="lon">
+
+<input
+type="hidden"
+id="acc"
+name="acc">
+
+<p>
+
+<b>Distance (m):</b>
 
 <input
 type="number"
-name="distance"
-value="$DISTANCE"
+name="distance_m"
 style="
-font-size:32px;
-padding:15px;
-width:220px;
+font-size:28px;
+padding:10px;
+width:200px;
 ">
 
-<br><br>
+</p>
 
 <input
 type="submit"
@@ -276,7 +413,7 @@ padding:30px;
 
 <br>
 
-<form action="/data/mesh_test_log.csv">
+<form action="/data/mesh_test_log.csv" method="get">
 
 <input
 type="submit"
@@ -290,7 +427,21 @@ padding:20px;
 
 <br>
 
-<form action="/cgi-bin/meshtest.sh" method="get">
+<form action="/map.html" method="get" target="_blank">
+
+<input
+type="submit"
+value="Open RF Map"
+style="
+font-size:30px;
+padding:20px;
+">
+
+</form>
+
+<br>
+
+<form action="/cgi-bin/meshtest.sh" method="post">
 
 <input
 type="hidden"
@@ -300,14 +451,10 @@ value="1">
 <input
 type="submit"
 value="Clear CSV Log"
-
-onclick="return confirm('Delete all measurements?');"
-
 style="
-font-size:30px;
+font-size:28px;
 padding:20px;
-background-color:#cc4444;
-color:white;
+background-color:#ffcccc;
 ">
 
 </form>
@@ -315,13 +462,17 @@ color:white;
 <hr>
 
 <p>
+
 CSV Path:
+
 <a href="/data/mesh_test_log.csv">
 /data/mesh_test_log.csv
 </a>
+
 </p>
 
 </body>
+
 </html>
 
 EOF

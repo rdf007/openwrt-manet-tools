@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8">
+
+<title>Mesh RF Map</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link
+rel="stylesheet"
+href="https://unpkg.com/leaflet/dist/leaflet.css"
+/>
+
+<style>
+
+html, body {
+
+    margin: 0;
+    padding: 0;
+    height: 100%;
+
+}
+
+#map {
+
+    width: 100%;
+    height: 100%;
+
+}
+
+.info {
+
+    position: absolute;
+
+    top: 10px;
+    right: 10px;
+
+    background: rgba(255,255,255,0.9);
+
+    padding: 10px;
+
+    z-index: 1000;
+
+    font-family: monospace;
+    font-size: 14px;
+
+    border-radius: 5px;
+
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+
+}
+
+.marker-label {
+
+    background: rgba(0,0,0,0.8);
+
+    color: white;
+
+    border-radius: 50%;
+
+    width: 24px;
+    height: 24px;
+
+    line-height: 24px;
+
+    text-align: center;
+
+    font-size: 12px;
+
+    font-weight: bold;
+
+    border: 2px solid white;
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="info">
+
+<b>OpenWrt MANET RF Map</b><br>
+Colored by SNR
+
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+
+//////////////////////////////////////////////////
+// MAP INIT
+//////////////////////////////////////////////////
+
+var map = L.map('map').setView(
+    [0, 0],
+    2
+);
+
+//////////////////////////////////////////////////
+// OPENSTREETMAP TILES
+//////////////////////////////////////////////////
+
+L.tileLayer(
+
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+
+    {
+        attribution:
+            '&copy; OpenStreetMap contributors'
+    }
+
+).addTo(map);
+
+//////////////////////////////////////////////////
+// CSV FILE
+//////////////////////////////////////////////////
+
+const csvUrl =
+    window.location.origin +
+    "/data/mesh_test_log.csv";
+
+//////////////////////////////////////////////////
+// COLOR FUNCTION
+//////////////////////////////////////////////////
+
+function getColor(snr) {
+
+    if (snr >= 40) return "green";
+
+    if (snr >= 25) return "orange";
+
+    return "red";
+}
+
+//////////////////////////////////////////////////
+// CSV PARSER
+//////////////////////////////////////////////////
+
+function parseCSVLine(line) {
+
+    const result = [];
+
+    let current = "";
+
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+
+        const char = line[i];
+
+        if (char === '"') {
+
+            inQuotes = !inQuotes;
+
+        }
+
+        else if (char === ',' && !inQuotes) {
+
+            result.push(current);
+
+            current = "";
+
+        }
+
+        else {
+
+            current += char;
+
+        }
+
+    }
+
+    result.push(current);
+
+    return result;
+}
+
+//////////////////////////////////////////////////
+// LOAD CSV
+//////////////////////////////////////////////////
+
+fetch(csvUrl)
+
+.then(response => response.text())
+
+.then(data => {
+
+    const lines = data.trim().split('\n');
+
+    const header =
+        parseCSVLine(lines[0]);
+
+    const latIndex =
+        header.indexOf("lat");
+
+    const lonIndex =
+        header.indexOf("lon");
+
+    const snrIndex =
+        header.indexOf("snr");
+
+    const rssiIndex =
+        header.indexOf("rssi");
+
+    const airtimeIndex =
+        header.indexOf("airtime");
+
+    const distanceIndex =
+        header.indexOf("distance_m");
+
+    let points = [];
+
+    let markerCount = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+
+        const row =
+            parseCSVLine(lines[i]);
+
+        const lat =
+            parseFloat(row[latIndex]);
+
+        const lon =
+            parseFloat(row[lonIndex]);
+
+        const snr =
+            parseFloat(row[snrIndex]);
+
+        const rssi =
+            parseFloat(row[rssiIndex]);
+
+        const airtime =
+            parseFloat(row[airtimeIndex]);
+
+        const distance =
+            row[distanceIndex];
+
+        //////////////////////////////////////////////////
+        // VALIDATE GPS
+        //////////////////////////////////////////////////
+
+        if (
+            isNaN(lat) ||
+            isNaN(lon)
+        ) {
+            continue;
+        }
+
+        markerCount++;
+
+        points.push([lat, lon]);
+
+        //////////////////////////////////////////////////
+        // COLORED CIRCLE
+        //////////////////////////////////////////////////
+
+        L.circleMarker(
+
+            [lat, lon],
+
+            {
+                radius: 10,
+
+                color: getColor(snr),
+
+                fillColor: getColor(snr),
+
+                fillOpacity: 0.7,
+
+                weight: 2
+
+            }
+
+        ).addTo(map);
+
+        //////////////////////////////////////////////////
+        // NUMBER LABEL
+        //////////////////////////////////////////////////
+
+        const label = L.marker(
+
+            [lat, lon],
+
+            {
+                icon: L.divIcon({
+
+                    className: '',
+
+                    html:
+                        '<div class="marker-label">' +
+                        markerCount +
+                        '</div>',
+
+                    iconSize: [24, 24]
+
+                })
+
+            }
+
+        ).addTo(map);
+
+        //////////////////////////////////////////////////
+        // POPUP
+        //////////////////////////////////////////////////
+
+        label.bindPopup(
+
+            "<b>Measurement:</b> " + markerCount + "<br>" +
+
+            "<b>Distance:</b> " + distance + " m<br>" +
+
+            "<b>RSSI:</b> " + rssi + " dBm<br>" +
+
+            "<b>SNR:</b> " + snr + " dB<br>" +
+
+            "<b>Airtime:</b> " + airtime
+
+        );
+    }
+
+    //////////////////////////////////////////////////
+    // DRAW PATH
+    //////////////////////////////////////////////////
+
+    if (points.length > 1) {
+
+        L.polyline(
+            points,
+            {
+                color: 'cyan'
+            }
+        ).addTo(map);
+
+    }
+
+    //////////////////////////////////////////////////
+    // AUTO FIT
+    //////////////////////////////////////////////////
+
+    if (points.length > 0) {
+
+        map.fitBounds(points);
+
+    }
+
+})
+
+.catch(error => {
+
+    console.error(
+        "CSV Load Error:",
+        error
+    );
+
+});
+
+</script>
+
+</body>
+
+</html>
