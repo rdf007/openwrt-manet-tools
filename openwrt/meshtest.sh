@@ -12,6 +12,60 @@ MESHIF="wlan1"
 mkdir -p "$LOGDIR"
 
 ################################
+# MESH STATUS
+################################
+
+MESH_DISABLED=$(uci -q get wireless.wifinet0.disabled)
+
+if [ "$MESH_DISABLED" = "1" ]; then
+
+    PEERS=0
+
+    MESHSTATE="DISABLED"
+    MESHCOLOR="red"
+
+    MESHLABEL="Enable Mesh"
+    MESHBUTTONCOLOR="#ccffcc"
+
+else
+
+    STATION_INFO=$(iw dev $MESHIF station dump)
+
+    PEERS=$(echo "$STATION_INFO" | grep -c "^Station")
+
+    if echo "$STATION_INFO" | grep -q "mesh plink:[[:space:]]*ESTAB"; then
+
+        MESHSTATE="CONNECTED"
+        MESHCOLOR="green"
+
+    elif echo "$STATION_INFO" | grep -q "mesh plink:[[:space:]]*BLOCKED"; then
+
+        MESHSTATE="BLOCKED"
+        MESHCOLOR="red"
+
+    elif echo "$STATION_INFO" | grep -q "mesh plink:[[:space:]]*LISTEN"; then
+
+        MESHSTATE="LISTEN"
+        MESHCOLOR="orange"
+
+    elif [ "$PEERS" -gt 0 ]; then
+
+        MESHSTATE="DISCOVERING"
+        MESHCOLOR="orange"
+
+    else
+
+        MESHSTATE="NO PEER"
+        MESHCOLOR="red"
+
+    fi
+
+    MESHLABEL="Disable Mesh"
+    MESHBUTTONCOLOR="#ffcccc"
+
+fi
+
+################################
 # HANDLE GET / POST
 ################################
 
@@ -89,6 +143,25 @@ CONNECTED=$(echo "$STATS" \
 | awk '/connected time/ {print $3; exit}')
 
 ################################
+# TRAFFIC STATS
+################################
+
+RXBYTES=$(echo "$STATS" \
+| awk '/rx bytes:/ {print $3; exit}')
+
+TXBYTES=$(echo "$STATS" \
+| awk '/tx bytes:/ {print $3; exit}')
+
+RXPKTS=$(echo "$STATS" \
+| awk '/rx packets:/ {print $3; exit}')
+
+TXPKTS=$(echo "$STATS" \
+| awk '/tx packets:/ {print $3; exit}')
+
+RXDROP=$(echo "$STATS" \
+| awk '/rx drop misc:/ {print $4; exit}')
+
+################################
 # SURVEY DATA
 ################################
 
@@ -145,9 +218,47 @@ fi
 [ -z "$AIRTIME" ] && AIRTIME="-"
 [ -z "$CONNECTED" ] && CONNECTED="-"
 
+[ -z "$RXBYTES" ] && RXBYTES="-"
+[ -z "$TXBYTES" ] && TXBYTES="-"
+
+[ -z "$RXPKTS" ] && RXPKTS="-"
+[ -z "$TXPKTS" ] && TXPKTS="-"
+
+[ -z "$RXDROP" ] && RXDROP="-"
+
 [ -z "$NOISE" ] && NOISE="-"
 
 STATUS=""
+
+################################
+# MESH TOGGLE
+################################
+
+if echo "$POST_DATA" | grep -q "mesh_toggle=1"; then
+
+    MESH_DISABLED=$(uci -q get wireless.wifinet0.disabled)
+
+    if [ "$MESH_DISABLED" = "1" ]; then
+
+        uci set wireless.wifinet0.disabled='0'
+
+    else
+
+        uci set wireless.wifinet0.disabled='1'
+
+    fi
+
+    uci commit wireless
+
+    wifi reload
+
+    echo "Status: 303 See Other"
+    echo "Location: /cgi-bin/meshtest.sh"
+    echo ""
+
+    exit 0
+
+fi
 
 ################################
 # CAPTURE BUTTON
@@ -156,14 +267,15 @@ STATUS=""
 if echo "$POST_DATA" | grep -q "run=1"; then
 
     TIME=$(date +"%F %T")
+    EPOCH=$(date +%s)
 
     if [ ! -f "$LOGFILE" ]; then
 
-        echo "distance_m,lat,lon,accuracy_m,time,rssi,avg,ack,noise,snr,busy_pct,txrate,rxrate,txmcs,rxmcs,retries,failed,airtime,connected" > "$LOGFILE"
+        echo "distance_m,lat,lon,accuracy_m,time,epoch,rssi,avg,ack,noise,snr,busy_pct,txrate,rxrate,txmcs,rxmcs,retries,failed,airtime,connected,tx_bytes,rx_bytes,tx_packets,rx_packets,rx_drop_misc" > "$LOGFILE"
 
     fi
 
-    echo "$DISTANCE,$LAT,$LON,$ACC,$TIME,$RSSI,$AVG,$ACK,$NOISE,$SNR,$BUSYPCT,\"$TXRATE\",\"$RXRATE\",$TXMCS,$RXMCS,$RETRIES,$FAILED,$AIRTIME,$CONNECTED" >> "$LOGFILE"
+    echo "$DISTANCE,$LAT,$LON,$ACC,$TIME,$EPOCH,$RSSI,$AVG,$ACK,$NOISE,$SNR,$BUSYPCT,\"$TXRATE\",\"$RXRATE\",$TXMCS,$RXMCS,$RETRIES,$FAILED,$AIRTIME,$CONNECTED,$TXBYTES,$RXBYTES,$TXPKTS,$RXPKTS,$RXDROP" >> "$LOGFILE"
 
     ################################################
     # REDIRECT AFTER POST
@@ -298,6 +410,51 @@ font-size:22px;
 
 <h1>Mesh Range Test Dashboard</h1>
 
+<hr>
+
+<h2>Mesh Status</h2>
+
+<p>
+
+<b>Status:</b>
+
+<span style="
+font-weight:bold;
+color:$MESHCOLOR;
+">
+
+$MESHSTATE
+
+</span>
+
+</p>
+
+<p>
+
+<b>Peers:</b>
+
+$PEERS
+
+</p>
+
+<form action="/cgi-bin/meshtest.sh" method="post">
+
+<input
+type="hidden"
+name="mesh_toggle"
+value="1">
+
+<input
+type="submit"
+value="$MESHLABEL"
+style="
+font-size:26px;
+padding:15px;
+background-color:$MESHBUTTONCOLOR;
+">
+
+</form>
+
 <form action="/cgi-bin/meshtest.sh" method="get">
 
 <input
@@ -345,6 +502,20 @@ padding:15px;
 <p><b>Airtime Metric:</b> $AIRTIME</p>
 
 <p><b>Connected:</b> $CONNECTED sec</p>
+
+<hr>
+
+<h2>Traffic Statistics</h2>
+
+<p><b>TX Bytes:</b> $TXBYTES</p>
+
+<p><b>RX Bytes:</b> $RXBYTES</p>
+
+<p><b>TX Packets:</b> $TXPKTS</p>
+
+<p><b>RX Packets:</b> $RXPKTS</p>
+
+<p><b>RX Drop Misc:</b> $RXDROP</p>
 
 <hr>
 
