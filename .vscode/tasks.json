@@ -2,16 +2,24 @@
   "version": "2.0.0",
 
   "tasks": [
-
     {
       "label": "Deploy OpenWrt Dashboard",
 
       "type": "shell",
 
-      "command": "scp -O openwrt/meshtest.sh root@10.10.10.1:/www/cgi-bin/ && scp -O openwrt/map.html root@10.10.10.1:/www/",
+      "command": "scp -O openwrt/meshtest.sh root@10.10.10.1:/www/cgi-bin/ && scp -O openwrt/map.html root@10.10.10.1:/www/ && scp -O openwrt/meshtest.sh root@10.10.10.2:/www/cgi-bin/ && scp -O openwrt/map.html root@10.10.10.2:/www/",
+
+      "problemMatcher": []
+    },
+
+    {
+      "label": "Deploy MediaMTX Config",
+
+      "type": "shell",
+
+      "command": "scp -O mediamtx/mediamtx.yml root@10.10.10.1:/root/mediamtx/ && scp -O mediamtx/mediamtx.yml root@10.10.10.2:/root/mediamtx/",
 
       "problemMatcher": []
     }
-
   ]
 }
