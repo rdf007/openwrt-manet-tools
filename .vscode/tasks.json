@@ -7,7 +7,7 @@
 
       "type": "shell",
 
-      "command": "scp -O openwrt/meshtest.sh root@10.10.10.1:/www/cgi-bin/ && scp -O openwrt/map.html root@10.10.10.1:/www/ && scp -O openwrt/meshtest.sh root@10.10.10.2:/www/cgi-bin/ && scp -O openwrt/map.html root@10.10.10.2:/www/",
+      "command": "scp -O openwrt/meshtest.sh root@10.10.10.1:/www/cgi-bin/ && scp -O openwrt/meshtest.sh root@10.10.10.2:/www/cgi-bin/",
 
       "problemMatcher": []
     },
@@ -18,6 +18,16 @@
       "type": "shell",
 
       "command": "scp -O mediamtx/mediamtx.yml root@10.10.10.1:/root/mediamtx/ && scp -O mediamtx/mediamtx.yml root@10.10.10.2:/root/mediamtx/",
+
+      "problemMatcher": []
+    },
+
+    {
+      "label": "Deploy init.d Scripts",
+
+      "type": "shell",
+
+      "command": "scp -O openwrt/init.d/mediamtx root@10.10.10.1:/etc/init.d/ && scp -O openwrt/init.d/mediamtx root@10.10.10.2:/etc/init.d/ && scp -O openwrt/init.d/socat root@10.10.10.1:/etc/init.d/ && scp -O openwrt/init.d/socat root@10.10.10.2:/etc/init.d/ && scp -O openwrt/socat/start-socat.sh root@10.10.10.1:/root/socat/ && scp -O openwrt/socat/start-socat.sh root@10.10.10.2:/root/socat/",
 
       "problemMatcher": []
     }

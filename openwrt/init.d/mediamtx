@@ -1,0 +1,20 @@
+#!/bin/sh /etc/rc.common
+
+START=95
+STOP=10
+
+start() {
+
+    logger -t mediamtx-init "Starting MediaMTX..."
+
+    /root/mediamtx/mediamtx \
+        /root/mediamtx/mediamtx.yml \
+        >/tmp/mediamtx.log 2>&1 &
+}
+
+stop() {
+
+    logger -t mediamtx-init "Stopping MediaMTX..."
+
+    killall mediamtx 2>/dev/null
+}
